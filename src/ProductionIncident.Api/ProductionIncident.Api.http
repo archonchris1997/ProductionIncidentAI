@@ -1,0 +1,76 @@
+@host = http://localhost:5100
+
+### 1. Report an incident (DB connection leak scenario → concurrent round, contradiction, handoff deep dive)
+POST {{host}}/incidents
+Content-Type: application/json
+
+{
+  "incidentId": "INC-123",
+  "title": "checkout-api HTTP 500 after deployment",
+  "description": "Checkout requests failing with HTTP 500 since ~14:04 UTC, shortly after a release.",
+  "service": "checkout-api",
+  "severity": "SEV1"
+}
+
+### 2. Follow the investigation (phase, evidence, todos, timeline)
+GET {{host}}/incidents/INC-123
+
+### 3. Pending approvals (the rollback proposed by RemediationAgent)
+GET {{host}}/approvals?status=Pending
+
+### 4. Approve (replace the id) → action executes → verification → close & learn
+POST {{host}}/approvals/apr-REPLACE-ME/decision
+Content-Type: application/json
+
+{ "approved": true, "decidedBy": "cris@oncall", "comment": "Rollback approved" }
+
+### 5. Report (postmortem draft)
+GET {{host}}/incidents/INC-123/report
+
+### 6. Turn receipts (model, prompt/skill versions, tools, tokens, cost, latency per agent run)
+GET {{host}}/incidents/INC-123/receipts
+
+### Other scenarios
+POST {{host}}/incidents
+Content-Type: application/json
+
+{ "incidentId": "INC-124", "title": "search-api latency spike and timeouts", "service": "search-api" }
+
+###
+POST {{host}}/incidents
+Content-Type: application/json
+
+{ "incidentId": "INC-125", "title": "payments-api failing with HTTP 502", "service": "payments-api" }
+
+### Azure Monitor webhook (common alert schema)
+POST {{host}}/webhooks/azure-monitor
+Content-Type: application/json
+
+{
+  "schemaId": "azureMonitorCommonAlertSchema",
+  "data": {
+    "essentials": {
+      "alertId": "/subscriptions/xxx/providers/Microsoft.AlertsManagement/alerts/7f3c2a",
+      "alertRule": "payments-api 5xx rate > 5%",
+      "severity": "Sev1",
+      "monitorCondition": "Fired",
+      "configurationItems": [ "payments-api" ],
+      "description": "HTTP 502 rate above threshold"
+    }
+  }
+}
+
+### Kill switch
+POST {{host}}/incidents/INC-124/stop
+Content-Type: application/json
+
+{ "reason": "Handled manually by on-call" }
+
+### Building blocks
+GET {{host}}/tools
+###
+GET {{host}}/skills
+###
+GET {{host}}/knowledge/search?q=pool exhaustion sql timeout
+###
+GET {{host}}/memory/episodes

@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\ProductionIncident.Core\ProductionIncident.Core.csproj" />
+    <ProjectReference Include="..\ProductionIncident.Harness\ProductionIncident.Harness.csproj" />
+    <ProjectReference Include="..\ProductionIncident.LlmOps\ProductionIncident.LlmOps.csproj" />
+    <ProjectReference Include="..\ProductionIncident.Skills\ProductionIncident.Skills.csproj" />
+  </ItemGroup>
+
+</Project>

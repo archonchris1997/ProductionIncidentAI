@@ -1,0 +1,58 @@
+[
+  {
+    "id": "INC-EVAL-001",
+    "input": {
+      "title": "checkout-api HTTP 500 after deployment",
+      "description": "Checkout requests failing with HTTP 500 since ~14:04 UTC, shortly after a release.",
+      "service": "checkout-api",
+      "severity": "SEV1"
+    },
+    "expectedRootCause": [ "connection leak", "v1.42" ],
+    "requiredEvidence": [
+      "prior to obtaining a connection from the pool",
+      "saturated 100/100",
+      "14 minutes before the incident",
+      "no longer disposes"
+    ],
+    "forbiddenClaims": [ "CPU saturation", "traffic surge" ],
+    "expectedTools": [ "get_recent_errors", "get_trace", "get_database_health", "get_connection_pool", "get_recent_deployments", "get_release_diff", "get_error_rate" ],
+    "optionalTools": [ "get_slow_queries", "get_latency", "get_cpu", "get_memory", "get_request_rate", "get_config_changes", "get_deployment_status", "search_knowledge", "recall_similar_incidents", "handoff_to" ],
+    "expectedResolution": [ "rollback_deployment", "v1.41" ],
+    "minConfidence": 0.85,
+    "maxRounds": 3
+  },
+  {
+    "id": "INC-EVAL-002",
+    "input": {
+      "title": "search-api latency spike and timeouts",
+      "description": "Search requests timing out since 14:18 UTC during a marketing campaign.",
+      "service": "search-api",
+      "severity": "SEV2"
+    },
+    "expectedRootCause": [ "CPU saturation", "traffic surge" ],
+    "requiredEvidence": [ "CPU saturated", "request rate surge", "No recent deployment" ],
+    "forbiddenClaims": [ "connection leak", "release v" ],
+    "expectedTools": [ "get_recent_errors", "get_cpu", "get_request_rate", "get_recent_deployments" ],
+    "optionalTools": [ "get_trace", "get_database_health", "get_slow_queries", "get_error_rate", "get_latency", "get_memory", "get_config_changes", "get_deployment_status", "search_knowledge", "recall_similar_incidents" ],
+    "expectedResolution": [ "scale_service" ],
+    "minConfidence": 0.85,
+    "maxRounds": 1
+  },
+  {
+    "id": "INC-EVAL-003",
+    "input": {
+      "title": "payments-api failing with HTTP 502",
+      "description": "Card authorizations failing since 09:12 UTC. No deployment today.",
+      "service": "payments-api",
+      "severity": "SEV1"
+    },
+    "expectedRootCause": [ "Configuration change", "PaymentGateway:TimeoutMs" ],
+    "requiredEvidence": [ "HttpClient timeout of 0.5 seconds", "PaymentGateway:TimeoutMs changed from 5000 to 500" ],
+    "forbiddenClaims": [ "CPU", "connection leak" ],
+    "expectedTools": [ "get_recent_errors", "get_config_changes", "get_error_rate" ],
+    "optionalTools": [ "get_trace", "get_database_health", "get_slow_queries", "get_latency", "get_cpu", "get_memory", "get_request_rate", "get_recent_deployments", "get_deployment_status", "search_knowledge", "recall_similar_incidents" ],
+    "expectedResolution": [ "change_configuration", "5000" ],
+    "minConfidence": 0.85,
+    "maxRounds": 1
+  }
+]

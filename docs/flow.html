@@ -1,0 +1,511 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ProductionIncidentAI Flow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column; the state machine diagram is the centerpiece, with a phase inspector + INC-200 replay beneath it. */
+:root {
+  --bg: #F3F6FA;
+  --surface: #FFFFFF;
+  --ink: #16202C;
+  --muted: #586678;
+  --line: #D3DBE5;
+  --accent: #2F5BD3;
+  --accent-soft: #E6EDFD;
+  --gate: #B76E00;
+  --gate-soft: #FCF1DE;
+  --ok: #1D8251;
+  --ok-soft: #E2F4EA;
+  --bad: #C0431A;
+  --bad-soft: #FBE7DF;
+  --code-bg: #EDF1F6;
+
+  --f-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --f-body: "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0F151D; --surface: #17202B; --ink: #E4EAF2; --muted: #95A3B5; --line: #2B3747;
+    --accent: #84A6FF; --accent-soft: #1D2C4D; --gate: #F0A93B; --gate-soft: #3A2C14;
+    --ok: #4CC38A; --ok-soft: #15332A; --bad: #F2805C; --bad-soft: #3D2018; --code-bg: #1E2935;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0F151D; --surface: #17202B; --ink: #E4EAF2; --muted: #95A3B5; --line: #2B3747;
+  --accent: #84A6FF; --accent-soft: #1D2C4D; --gate: #F0A93B; --gate-soft: #3A2C14;
+  --ok: #4CC38A; --ok-soft: #15332A; --bad: #F2805C; --bad-soft: #3D2018; --code-bg: #1E2935;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--f-body);
+  font-size: 15px;
+  line-height: 1.6;
+  padding-inline: 20px;
+}
+.wrap { max-width: 1080px; margin: 0 auto; padding-block: 40px 72px; display: grid; gap: 56px; }
+
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: clamp(30px, 5vw, 44px); font-weight: 800; line-height: 1.1; }
+h2 { font-size: 24px; font-weight: 700; }
+h3 { font-size: 17px; font-weight: 700; }
+p { margin: 0; max-width: 68ch; }
+code, .mono { font-family: var(--f-mono); font-size: 0.86em; }
+code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+.eyebrow { font-family: var(--f-mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+
+header { display: grid; gap: 14px; }
+header .lede { font-size: 17px; color: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 7px; }
+.sw { width: 12px; height: 12px; border-radius: 3px; border: 2px solid; display: inline-block; }
+
+section { display: grid; gap: 18px; }
+.section-head { display: grid; gap: 6px; }
+.section-head p { color: var(--muted); }
+
+/* ── diagram ── */
+.diagram-box { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow-x: auto; }
+.diagram-box svg { display: block; min-width: 760px; width: 100%; height: auto; }
+svg text { font-family: var(--f-body); }
+.node rect { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; transition: fill .15s, stroke .15s; }
+.node text.name { font-family: var(--f-display); font-weight: 700; font-size: 14px; fill: var(--ink); }
+.node text.sub { font-size: 11px; fill: var(--muted); }
+.node { cursor: pointer; outline: none; }
+.node:hover rect { stroke: var(--accent); }
+.node:focus-visible rect { stroke: var(--accent); stroke-width: 3; }
+.node.gate rect { stroke: var(--gate); fill: var(--gate-soft); }
+.node.ok rect { stroke: var(--ok); fill: var(--ok-soft); }
+.node.bad rect { stroke: var(--bad); fill: var(--bad-soft); }
+.node.selected rect { stroke: var(--accent); stroke-width: 3; fill: var(--accent-soft); }
+.node.gate.selected rect { stroke: var(--gate); fill: var(--gate-soft); }
+.node.ok.selected rect { stroke: var(--ok); fill: var(--ok-soft); }
+.node.bad.selected rect { stroke: var(--bad); fill: var(--bad-soft); }
+.node .step-badge { fill: var(--accent); }
+.node .step-badge-text { fill: var(--surface); font-family: var(--f-mono); font-size: 10px; font-weight: 500; }
+.edge { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+.edge.fail { stroke: var(--bad); stroke-dasharray: 5 4; }
+.edge.loop { stroke: var(--accent); }
+.edge-label { font-size: 11px; fill: var(--muted); }
+.edge-label.fail { fill: var(--bad); }
+.edge-label.loop { fill: var(--accent); }
+.arrow { fill: var(--muted); }
+.arrow-fail { fill: var(--bad); }
+.arrow-loop { fill: var(--accent); }
+.diagram-note { font-size: 13px; color: var(--muted); padding: 10px 16px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 6px 20px; }
+
+/* ── inspector ── */
+.inspector { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 760px) { .inspector { grid-template-columns: 1fr; } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; display: grid; gap: 14px; align-content: start; }
+.panel h3 { font-size: 20px; }
+.kv { display: grid; grid-template-columns: 92px 1fr; gap: 6px 14px; font-size: 14px; }
+.kv dt { color: var(--muted); font-size: 12px; font-family: var(--f-mono); text-transform: uppercase; letter-spacing: 0.06em; padding-top: 3px; }
+.kv dd { margin: 0; }
+.panel ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.run { background: var(--code-bg); border-radius: 8px; padding: 12px 14px; font-family: var(--f-mono); font-size: 12.5px; line-height: 1.55; overflow-wrap: anywhere; }
+.run .t { color: var(--muted); margin-right: 8px; }
+
+.stepper { display: grid; gap: 12px; }
+.stepper .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+button {
+  font: 500 14px var(--f-body); color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 8px; padding: 7px 14px; cursor: pointer;
+}
+button:hover { border-color: var(--accent); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+button:disabled { opacity: .45; cursor: default; }
+.counter { font-family: var(--f-mono); font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; margin-left: auto; }
+.trail { display: flex; flex-wrap: wrap; gap: 6px; }
+.trail span { font-size: 12px; font-family: var(--f-mono); padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+.trail span.done { color: var(--ink); border-color: var(--accent); }
+.trail span.now { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+
+/* ── projects ── */
+.tiers { display: grid; gap: 10px; }
+.tier { display: grid; grid-template-columns: 150px 1fr; gap: 14px; align-items: stretch; }
+@media (max-width: 640px) { .tier { grid-template-columns: 1fr; gap: 6px; } }
+.tier-label { font-family: var(--f-mono); font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding-top: 12px; }
+.tier-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+.proj { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: grid; gap: 4px; align-content: start; }
+.proj b { font-family: var(--f-display); font-size: 15px; }
+.proj span { font-size: 13px; color: var(--muted); line-height: 1.45; }
+.proj em { font-style: normal; font-family: var(--f-mono); font-size: 11px; color: var(--accent); }
+.dep-note { font-size: 13px; color: var(--muted); }
+
+/* ── loop + lists ── */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { font-size: 13px; padding: 4px 11px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.sources { display: grid; gap: 12px; }
+.source { display: grid; grid-template-columns: 110px 1fr; gap: 12px; font-size: 14px; }
+.source b { font-family: var(--f-mono); font-size: 12px; font-weight: 500; color: var(--accent); padding-top: 2px; }
+
+.table-box { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: 14px; }
+th, td { text-align: left; padding: 10px 16px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--f-mono); font-size: 12px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+tr:last-child td { border-bottom: 0; }
+td.num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 18px; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">ProductionIncidentAI · .NET 10</div>
+  <h1>How an incident moves through the system</h1>
+  <p class="lede">An alert comes in, specialist agents investigate in parallel, a root cause is argued from evidence, a person approves the fix, and the system verifies recovery and writes the postmortem. Click any phase in the diagram, or replay the real <code>INC-200</code> run step by step.</p>
+  <div class="legend">
+    <span><i class="sw" style="border-color:var(--line);background:var(--surface)"></i>Automated phase</span>
+    <span><i class="sw" style="border-color:var(--gate);background:var(--gate-soft)"></i>Human decision</span>
+    <span><i class="sw" style="border-color:var(--ok);background:var(--ok-soft)"></i>Resolved</span>
+    <span><i class="sw" style="border-color:var(--bad);background:var(--bad-soft)"></i>Handed to a human</span>
+  </div>
+</header>
+
+<section aria-labelledby="flow-h">
+  <div class="section-head">
+    <h2 id="flow-h">The investigation workflow</h2>
+    <p><code>IncidentWorkflow</code> is a state machine. It runs one phase at a time and saves a checkpoint after each, so a restarted server resumes where it stopped.</p>
+  </div>
+
+  <div class="diagram-box">
+    <svg viewBox="0 0 1050 440" role="img" aria-label="Workflow state machine: Triage, Concurrent investigation, Root cause with a deep-dive loop, Remediation, Awaiting approval, Executing actions, Verification, Closing, Resolved, with failure paths to Escalated.">
+      <defs>
+        <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrow" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="af" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrow-fail" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="al" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrow-loop" d="M0,0 L10,5 L0,10 z"/></marker>
+      </defs>
+
+      <!-- edges -->
+      <path class="edge" d="M170,67 H226" marker-end="url(#a)"/>
+      <path class="edge" d="M380,67 H436" marker-end="url(#a)"/>
+      <path class="edge" d="M590,67 H646" marker-end="url(#a)"/>
+      <text class="edge-label" x="618" y="56" text-anchor="middle">≥ 0.85</text>
+      <path class="edge" d="M800,67 H856" marker-end="url(#a)"/>
+
+      <path class="edge loop" d="M495,94 V171" marker-end="url(#al)"/>
+      <text class="edge-label loop" x="487" y="132" text-anchor="end">&lt; 0.85 or</text>
+      <text class="edge-label loop" x="487" y="146" text-anchor="end">open conflict</text>
+      <path class="edge loop" d="M535,175 V98" marker-end="url(#al)"/>
+      <text class="edge-label loop" x="543" y="132">re-analyse with</text>
+      <text class="edge-label loop" x="543" y="146">new evidence</text>
+
+      <path class="edge" d="M935,94 V296" marker-end="url(#a)"/>
+      <text class="edge-label" x="943" y="200">approved</text>
+      <path class="edge" d="M860,327 H804" marker-end="url(#a)"/>
+      <path class="edge" d="M650,327 H594" marker-end="url(#a)"/>
+      <text class="edge-label" x="622" y="316" text-anchor="middle">recovered</text>
+      <path class="edge" d="M440,327 H384" marker-end="url(#a)"/>
+
+      <path class="edge fail" d="M440,202 H95 V296" marker-end="url(#af)"/>
+      <text class="edge-label fail" x="268" y="194" text-anchor="middle">round limit · no new evidence · supervisor escalates</text>
+      <path class="edge fail" d="M1010,67 H1032 V420 H95 V358" marker-end="url(#af)"/>
+      <path class="edge fail" d="M725,354 V420"/>
+      <text class="edge-label fail" x="1000" y="411" text-anchor="middle">rejected</text>
+      <text class="edge-label fail" x="733" y="395">not recovered</text>
+
+      <!-- nodes -->
+      <g class="node" data-id="triage" tabindex="0" role="button" aria-label="Triage"><rect x="20" y="40" width="150" height="54" rx="8"/><text class="name" x="95" y="63" text-anchor="middle">Triage</text><text class="sub" x="95" y="80" text-anchor="middle">TriageAgent</text></g>
+      <g class="node" data-id="concurrent" tabindex="0" role="button" aria-label="Concurrent investigation"><rect x="230" y="40" width="150" height="54" rx="8"/><text class="name" x="305" y="63" text-anchor="middle">Concurrent</text><text class="sub" x="305" y="80" text-anchor="middle">4 specialists in parallel</text></g>
+      <g class="node" data-id="rootcause" tabindex="0" role="button" aria-label="Root cause"><rect x="440" y="40" width="150" height="54" rx="8"/><text class="name" x="515" y="63" text-anchor="middle">Root cause</text><text class="sub" x="515" y="80" text-anchor="middle">RootCauseAgent</text></g>
+      <g class="node" data-id="remediation" tabindex="0" role="button" aria-label="Remediation"><rect x="650" y="40" width="150" height="54" rx="8"/><text class="name" x="725" y="63" text-anchor="middle">Remediation</text><text class="sub" x="725" y="80" text-anchor="middle">RemediationAgent</text></g>
+      <g class="node gate" data-id="approval" tabindex="0" role="button" aria-label="Awaiting approval"><rect x="860" y="40" width="150" height="54" rx="8"/><text class="name" x="935" y="63" text-anchor="middle">Awaiting approval</text><text class="sub" x="935" y="80" text-anchor="middle">a person decides</text></g>
+      <g class="node" data-id="deepdive" tabindex="0" role="button" aria-label="Deep dive"><rect x="440" y="175" width="150" height="54" rx="8"/><text class="name" x="515" y="198" text-anchor="middle">Deep dive</text><text class="sub" x="515" y="215" text-anchor="middle">Supervisor + handoffs</text></g>
+      <g class="node" data-id="executing" tabindex="0" role="button" aria-label="Executing actions"><rect x="860" y="300" width="150" height="54" rx="8"/><text class="name" x="935" y="323" text-anchor="middle">Executing</text><text class="sub" x="935" y="340" text-anchor="middle">ActionExecutor</text></g>
+      <g class="node" data-id="verification" tabindex="0" role="button" aria-label="Verification"><rect x="650" y="300" width="150" height="54" rx="8"/><text class="name" x="725" y="323" text-anchor="middle">Verification</text><text class="sub" x="725" y="340" text-anchor="middle">error rate &lt; 1%?</text></g>
+      <g class="node" data-id="closing" tabindex="0" role="button" aria-label="Closing"><rect x="440" y="300" width="150" height="54" rx="8"/><text class="name" x="515" y="323" text-anchor="middle">Closing</text><text class="sub" x="515" y="340" text-anchor="middle">learn + postmortem</text></g>
+      <g class="node ok" data-id="resolved" tabindex="0" role="button" aria-label="Resolved"><rect x="230" y="300" width="150" height="54" rx="8"/><text class="name" x="305" y="323" text-anchor="middle">Resolved</text><text class="sub" x="305" y="340" text-anchor="middle">report + receipts</text></g>
+      <g class="node bad" data-id="escalated" tabindex="0" role="button" aria-label="Escalated"><rect x="20" y="300" width="150" height="54" rx="8"/><text class="name" x="95" y="323" text-anchor="middle">Escalated</text><text class="sub" x="95" y="340" text-anchor="middle">a human takes over</text></g>
+    </svg>
+    <div class="diagram-note">
+      <span><b>Kill switch:</b> <code>POST /incidents/{id}/stop</code> moves any running phase to <b>Stopped</b>.</span>
+      <span>An unrecoverable agent error moves it to <b>Failed</b>.</span>
+    </div>
+  </div>
+
+  <div class="inspector">
+    <article class="panel" id="detail" aria-live="polite"></article>
+    <aside class="panel stepper">
+      <div class="eyebrow">Replay INC-200</div>
+      <p style="font-size:14px;color:var(--muted)">The real run from this session: <i>checkout-api HTTP 500 after deployment</i>. Each step selects the phase it entered.</p>
+      <div class="controls">
+        <button id="prev" type="button">Back</button>
+        <button id="next" type="button" class="primary">Start replay</button>
+        <span class="counter" id="counter">0 / 11</span>
+      </div>
+      <div class="trail" id="trail"></div>
+      <div class="run" id="runline">Press “Start replay” to walk through the timeline.</div>
+    </aside>
+  </div>
+</section>
+
+<section aria-labelledby="loop-h">
+  <div class="section-head">
+    <h2 id="loop-h">Inside a single agent run</h2>
+    <p>Every agent, from Triage to Remediation, goes through <code>AgentRunner</code>. The Harness supplies the limits around this loop.</p>
+  </div>
+  <div class="diagram-box">
+    <svg viewBox="0 0 940 240" role="img" aria-label="Agent loop: context goes to the LLM; tool calls pass a policy check, run, are trimmed and return to the LLM; the final answer is parsed into a typed contract.">
+      <defs>
+        <marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrow" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="bl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrow-loop" d="M0,0 L10,5 L0,10 z"/></marker>
+      </defs>
+      <g class="node static"><rect x="10" y="80" width="170" height="56" rx="8"/><text class="name" x="95" y="104" text-anchor="middle">Context</text><text class="sub" x="95" y="121" text-anchor="middle">prompt + SKILL.md + state</text></g>
+      <g class="node static"><rect x="230" y="80" width="150" height="56" rx="8"/><text class="name" x="305" y="104" text-anchor="middle">LLM call</text><text class="sub" x="305" y="121" text-anchor="middle">scripted or real model</text></g>
+      <g class="node static"><rect x="430" y="80" width="150" height="56" rx="8"/><text class="name" x="505" y="104" text-anchor="middle">Policy check</text><text class="sub" x="505" y="121" text-anchor="middle">allow-list · risk · budget</text></g>
+      <g class="node static"><rect x="620" y="80" width="150" height="56" rx="8"/><text class="name" x="695" y="104" text-anchor="middle">Run tool</text><text class="sub" x="695" y="121" text-anchor="middle">read-only MCP tool</text></g>
+      <g class="node static"><rect x="800" y="80" width="130" height="56" rx="8"/><text class="name" x="865" y="104" text-anchor="middle">Trim result</text><text class="sub" x="865" y="121" text-anchor="middle">fit the context</text></g>
+      <g class="node static ok"><rect x="230" y="184" width="270" height="46" rx="8"/><text class="name" x="365" y="212" text-anchor="middle">Parse + repair JSON → typed contract</text></g>
+
+      <path class="edge" d="M180,108 H226" marker-end="url(#b)"/>
+      <path class="edge" d="M380,108 H426" marker-end="url(#b)"/>
+      <text class="edge-label" x="403" y="98" text-anchor="middle">tool call</text>
+      <path class="edge" d="M580,108 H616" marker-end="url(#b)"/>
+      <path class="edge" d="M770,108 H796" marker-end="url(#b)"/>
+      <path class="edge loop" d="M865,80 V34 H305 V76" marker-end="url(#bl)"/>
+      <text class="edge-label loop" x="585" y="26" text-anchor="middle">result goes back to the model · repeat</text>
+      <path class="edge" d="M305,136 V180" marker-end="url(#b)"/>
+      <text class="edge-label" x="297" y="163" text-anchor="end">final answer</text>
+      <text class="edge-label" x="505" y="156" text-anchor="middle">blocked → error returned to the model</text>
+    </svg>
+  </div>
+  <div class="chips">
+    <span class="chip">Max iterations, then a forced final answer</span>
+    <span class="chip">Timeouts and retries</span>
+    <span class="chip">Token and cost budget</span>
+    <span class="chip">Kill switch checked every turn</span>
+    <span class="chip">Handoff targets validated</span>
+    <span class="chip">One turn receipt per run</span>
+  </div>
+</section>
+
+<section aria-labelledby="proj-h">
+  <div class="section-head">
+    <h2 id="proj-h">The projects in <code>src/</code></h2>
+    <p>Each tier depends only on the tiers below it. <code>Core</code> depends on nothing.</p>
+  </div>
+  <div class="tiers">
+    <div class="tier"><div class="tier-label">Entry points</div><div class="tier-row">
+      <div class="proj"><b>Api</b><span>HTTP endpoints: incidents, approvals, Azure Monitor webhook, tools, skills, knowledge, memory.</span><em>→ Infrastructure</em></div>
+      <div class="proj"><b>McpServer</b><span>The same tools over MCP, as separate read-only and write servers.</span><em>→ Mcp</em></div>
+    </div></div>
+    <div class="tier"><div class="tier-label">Composition</div><div class="tier-row">
+      <div class="proj"><b>Infrastructure</b><span>Wires everything together, runs the background worker, picks the model, and holds the scripted simulation.</span><em>→ Application</em></div>
+    </div></div>
+    <div class="tier"><div class="tier-label">Orchestration</div><div class="tier-row">
+      <div class="proj"><b>Application</b><span>IncidentWorkflow, evidence aggregation, conflict detection, confidence routing, action execution, verification, reports.</span><em>→ Agents · Mcp · Rag · Memory</em></div>
+    </div></div>
+    <div class="tier"><div class="tier-label">Capabilities</div><div class="tier-row">
+      <div class="proj"><b>Agents</b><span>The 8 agents, their prompts, AgentRunner and the handoff routes.</span><em>→ Harness · Skills · LlmOps</em></div>
+      <div class="proj"><b>Mcp</b><span>Tool classes, tool risk registry, input validation, fake production backends.</span><em>→ Core</em></div>
+      <div class="proj"><b>Rag</b><span>Knowledge base: runbooks, known errors and postmortems, with keyword (BM25) search.</span><em>→ Core</em></div>
+      <div class="proj"><b>Memory</b><span>Past incidents and facts, behind retrieval and admission gates.</span><em>→ Core</em></div>
+    </div></div>
+    <div class="tier"><div class="tier-label">Agent support</div><div class="tier-row">
+      <div class="proj"><b>Harness</b><span>Todos, context compaction, budgets, retries, approvals, kill switch, checkpoints.</span><em>→ Core</em></div>
+      <div class="proj"><b>Skills</b><span>Versioned SKILL.md procedures, one per agent.</span><em>→ Core</em></div>
+      <div class="proj"><b>LlmOps</b><span>Turn receipts, evals and the release gate.</span><em>→ Core</em></div>
+    </div></div>
+    <div class="tier"><div class="tier-label">Foundation</div><div class="tier-row">
+      <div class="proj"><b>Core</b><span>Shared contracts, InvestigationState and interfaces.</span><em>no dependencies</em></div>
+    </div></div>
+  </div>
+</section>
+
+<section aria-labelledby="src-h">
+  <div class="cols">
+    <div class="panel">
+      <h3 id="src-h">Three kinds of information</h3>
+      <div class="sources">
+        <div class="source"><b>Live tools</b><span>What production looks like right now. This is the evidence.</span></div>
+        <div class="source"><b>Knowledge</b><span><code>search_knowledge</code>: runbooks and postmortems, how the team handles this kind of problem.</span></div>
+        <div class="source"><b>Memory</b><span><code>recall_similar_incidents</code>: past incidents. Context only; the report labels it “context, not proof”.</span></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>Safety rules</h3>
+      <ul>
+        <li>Agents only get read-only tools. Write tools are reachable only from <code>ActionExecutor</code>, after approval.</li>
+        <li>Tool risk comes from the app's own registry. Unknown tools count as production-changing.</li>
+        <li>Inputs are validated on the server, so <code>Checkout-API; DROP TABLE</code> is rejected.</li>
+        <li>Contradictions are settled by evidence, never by majority vote.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section aria-labelledby="tests-h">
+  <div class="section-head">
+    <h2 id="tests-h">Tests</h2>
+    <p>All 79 pass after this session's fixes. They run against the scripted model, so they are deterministic and offline.</p>
+  </div>
+  <div class="table-box">
+    <table>
+      <thead><tr><th>Suite</th><th>Tests</th><th>What it checks</th></tr></thead>
+      <tbody>
+        <tr><td>UnitTests</td><td class="num">52</td><td>Tools, aggregation, conflict detection, gates</td></tr>
+        <tr><td>AgentEvals</td><td class="num">9</td><td>Right tools, no unnecessary calls, correct handoffs, output contract</td></tr>
+        <tr><td>WorkflowTests</td><td class="num">9</td><td>Full scenarios: approve, reject, kill switch, resume after restart</td></tr>
+        <tr><td>RegressionEvals</td><td class="num">5</td><td>Expected root cause, evidence and fix per scenario, plus the release gate</td></tr>
+        <tr><td>IntegrationTests</td><td class="num">4</td><td>The real HTTP API end to end</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<footer>Offline by default: <code>AI:Provider=Scripted</code> with fake backends. Set <code>AI:Provider=OpenAI</code> or <code>AzureOpenAI</code> and <code>Mcp:Mode=Remote</code> to use a real model and real tool servers.</footer>
+</div>
+
+<script>
+const PHASES = {
+  triage: {
+    title: "Triage", who: "TriageAgent", where: "Application/Workflows/IncidentWorkflow.cs",
+    does: ["Classifies the incident: category, severity, affected services.", "Picks which specialists to run and the strategy (broad or focused)."],
+    next: "Always goes on to the concurrent investigation."
+  },
+  concurrent: {
+    title: "Concurrent investigation", who: "LogsAgent, DatabaseAgent, MetricsAgent, DeploymentAgent", where: "IncidentWorkflow.ConcurrentInvestigationAsync · Orchestration/EvidenceAggregator.cs",
+    does: ["The specialists run in parallel, each with only its own read-only tools.", "EvidenceAggregator merges and deduplicates the evidence and collects open questions.", "ConflictDetector flags agents that contradict each other on the same topic."],
+    next: "Goes to Root cause with the merged evidence and any conflicts."
+  },
+  rootcause: {
+    title: "Root cause", who: "RootCauseAgent", where: "Agents/RootCause · Application ConfidenceRouter",
+    does: ["Reads all the evidence, searches the knowledge base and, if the retrieval gate allows, recalls similar past incidents.", "Returns a cause, a confidence score, contradictions and missing evidence.", "ConfidenceRouter: 0.85 or higher with no open contradiction goes to Remediation; otherwise a deep dive."],
+    next: "Remediation, Deep dive, or Escalated when the round limit is hit or a round found nothing new."
+  },
+  deepdive: {
+    title: "Deep dive", who: "SupervisorAgent, then the chosen specialists", where: "IncidentWorkflow.DeepDiveAsync · Agents HandoffTopology",
+    does: ["The Supervisor picks which specialists to send, based on the missing evidence.", "They run one after another. Each can hand off to another along allowed routes, for example Deployment to Database.", "Other requested specialists not reached by the chain run in parallel."],
+    next: "Back to Root cause to re-analyse with the new evidence."
+  },
+  remediation: {
+    title: "Remediation", who: "RemediationAgent", where: "Agents/Remediation · Harness/Approvals/ApprovalPolicy.cs",
+    does: ["Proposes an immediate action, a permanent fix, a verification plan and a rollback plan.", "Every production-changing action becomes an approval request."],
+    next: "Waits in Awaiting approval."
+  },
+  approval: {
+    title: "Awaiting approval", who: "A person, via POST /approvals/{id}/decision", where: "Harness/Approvals/InMemoryApprovalService.cs",
+    does: ["Nothing runs until someone decides.", "The decision records who decided and their comment."],
+    next: "Approved goes to Executing. Rejected goes to Escalated with no production change."
+  },
+  executing: {
+    title: "Executing actions", who: "ActionExecutor", where: "Application/Workflows/ActionExecutor.cs",
+    does: ["The only code allowed to call the write (operations) tools.", "Logs every production action at warning level with the approval id and approver."],
+    next: "Goes to Verification."
+  },
+  verification: {
+    title: "Verification", who: "VerificationService", where: "IncidentWorkflow.VerifyAsync",
+    does: ["Re-checks the service's error rate against the 1% threshold.", "Does not retry or try another fix on its own."],
+    next: "Recovered goes to Closing. Not recovered goes to Escalated."
+  },
+  closing: {
+    title: "Closing", who: "Memory consolidator", where: "IncidentWorkflow.CloseAsync · Memory/Consolidation",
+    does: ["Stores the incident as a memory episode; the admission gate drops duplicates.", "Builds the postmortem report and indexes it into the knowledge base for future searches."],
+    next: "Goes to Resolved."
+  },
+  resolved: {
+    title: "Resolved", who: "End state", where: "GET /incidents/{id}/report · /receipts",
+    does: ["The postmortem markdown is available from the report endpoint.", "Each agent run has a turn receipt: model, prompt and skill versions, tools, tokens, cost, latency."],
+    next: "Done."
+  },
+  escalated: {
+    title: "Escalated", who: "End state: a human takes over", where: "IncidentWorkflow (several transitions)",
+    does: ["Reached when the approval is rejected, recovery is not verified, the round limit is hit, a round finds no new evidence, or the Supervisor escalates.", "The stop reason is recorded on the investigation."],
+    next: "Done; on-call handles it from here."
+  }
+};
+
+const RUN = [
+  ["triage", "20:03:02", "Triage: availability, services [checkout-api], strategy broad, agents [LogsAgent, DatabaseAgent, MetricsAgent, DeploymentAgent]."],
+  ["concurrent", "20:03:02", "Round 1: 11 evidence items, 4 open questions, 1 conflict. LogsAgent says “pool exhaustion” (0.75) but DatabaseAgent says “orders-db is healthy at the moment; database not the cause” (0.70)."],
+  ["rootcause", "20:03:02", "Root cause (round 1): “Probable connection leak in checkout-api…”, confidence 0.62, 1 contradiction. Route: DeepDive."],
+  ["deepdive", "20:03:02", "Supervisor: start with DeploymentAgent, then DatabaseAgent. Handoff DeploymentAgent → DatabaseAgent: “Release diff shows the SqlConnection is no longer disposed…”. 2 new evidence, 0 conflicts left."],
+  ["rootcause", "20:03:02", "Root cause (round 2): “Release v1.42 removed SqlConnection disposal in OrderRepository…”, confidence 0.92, 0 contradictions. Route: Remediate."],
+  ["remediation", "20:03:02", "Approval requested apr-002872aedfce: rollback_deployment checkout-api → v1.41 (low risk)."],
+  ["approval", "20:07:27", "Approval apr-002872aedfce approved by cris@oncall: “Rollback approved”."],
+  ["executing", "20:07:27", "Action: rollback_deployment(service=checkout-api, targetVersion=v1.41): OK, “checkout-api rolled back to v1.41.”"],
+  ["verification", "20:07:27", "Error rate for checkout-api: 0.3% (baseline 0.2%, threshold 1%) → recovered."],
+  ["closing", "20:07:27", "Memory admitted: episode ep-INC-200. Not admitted: duplicate fact “checkout-api depends on orders-db”."],
+  ["resolved", "20:07:27", "Closing → Resolved. Postmortem draft indexed into the knowledge base."]
+];
+
+const nodes = document.querySelectorAll(".node[data-id]");
+const detail = document.getElementById("detail");
+let step = 0;
+
+function runLinesFor(id) {
+  return RUN.filter(r => r[0] === id);
+}
+
+function esc(s) { return s.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])); }
+
+function select(id) {
+  nodes.forEach(n => n.classList.toggle("selected", n.dataset.id === id));
+  const p = PHASES[id];
+  const lines = runLinesFor(id);
+  detail.innerHTML = `
+    <div class="eyebrow">Phase</div>
+    <h3>${p.title}</h3>
+    <dl class="kv">
+      <dt>Who</dt><dd>${esc(p.who)}</dd>
+      <dt>Code</dt><dd><code>${esc(p.where)}</code></dd>
+      <dt>Next</dt><dd>${esc(p.next)}</dd>
+    </dl>
+    <ul>${p.does.map(d => `<li>${esc(d)}</li>`).join("")}</ul>
+    ${lines.length ? `<div class="eyebrow">In INC-200</div><div class="run">${lines.map(l => `<div><span class="t">${l[1]}</span>${esc(l[2])}</div>`).join("")}</div>`
+                   : `<div class="eyebrow">In INC-200</div><p style="font-size:14px;color:var(--muted)">Not reached in this run.</p>`}`;
+}
+
+nodes.forEach(n => {
+  n.addEventListener("click", () => select(n.dataset.id));
+  n.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(n.dataset.id); } });
+});
+
+const prev = document.getElementById("prev");
+const next = document.getElementById("next");
+const counter = document.getElementById("counter");
+const trail = document.getElementById("trail");
+const runline = document.getElementById("runline");
+
+function renderStep() {
+  counter.textContent = `${step} / ${RUN.length}`;
+  prev.disabled = step === 0;
+  next.disabled = step === RUN.length;
+  next.textContent = step === 0 ? "Start replay" : "Next";
+  trail.innerHTML = RUN.map((r, i) => `<span class="${i < step - 1 ? "done" : i === step - 1 ? "now" : ""}">${PHASES[r[0]].title}</span>`).join("");
+  if (step === 0) {
+    runline.textContent = "Press “Start replay” to walk through the timeline.";
+    return;
+  }
+  const [id, t, msg] = RUN[step - 1];
+  runline.innerHTML = `<span class="t">${t}</span>${esc(msg)}`;
+  select(id);
+}
+
+prev.addEventListener("click", () => { if (step > 0) { step--; renderStep(); } });
+next.addEventListener("click", () => { if (step < RUN.length) { step++; renderStep(); } });
+
+select("rootcause");
+renderStep();
+</script>
+</body>
+</html>

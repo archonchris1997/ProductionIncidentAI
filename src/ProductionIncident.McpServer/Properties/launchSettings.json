@@ -1,0 +1,31 @@
+{
+  "profiles": {
+    "all": {
+      "commandName": "Project",
+      "launchBrowser": false,
+      "applicationUrl": "http://localhost:5103",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "McpServer__Profile": "all"
+      }
+    },
+    "investigation": {
+      "commandName": "Project",
+      "launchBrowser": false,
+      "applicationUrl": "http://localhost:5101",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "McpServer__Profile": "investigation"
+      }
+    },
+    "operations": {
+      "commandName": "Project",
+      "launchBrowser": false,
+      "applicationUrl": "http://localhost:5102",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "McpServer__Profile": "operations"
+      }
+    }
+  }
+}

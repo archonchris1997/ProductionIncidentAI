@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\ProductionIncident.Core\ProductionIncident.Core.csproj" />
+  </ItemGroup>
+
+  <!-- Skills (procedural memory) are versioned with the code and embedded so they can't drift at runtime. -->
+  <ItemGroup>
+    <EmbeddedResource Include="**\SKILL.md" Exclude="bin\**;obj\**" LogicalName="skills/%(RecursiveDir)%(Filename)%(Extension)" />
+    <EmbeddedResource Include="**\references\**\*.md" Exclude="bin\**;obj\**" LogicalName="skills/%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

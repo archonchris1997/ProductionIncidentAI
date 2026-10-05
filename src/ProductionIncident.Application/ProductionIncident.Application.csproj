@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\ProductionIncident.Agents\ProductionIncident.Agents.csproj" />
+    <ProjectReference Include="..\ProductionIncident.Mcp\ProductionIncident.Mcp.csproj" />
+    <ProjectReference Include="..\ProductionIncident.Rag\ProductionIncident.Rag.csproj" />
+    <ProjectReference Include="..\ProductionIncident.Memory\ProductionIncident.Memory.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,29 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ProductionIncident.Api/ProductionIncident.Api.csproj" />
+    <Project Path="src/ProductionIncident.Application/ProductionIncident.Application.csproj" />
+    <Project Path="src/ProductionIncident.Agents/ProductionIncident.Agents.csproj" />
+    <Project Path="src/ProductionIncident.Core/ProductionIncident.Core.csproj" />
+    <Project Path="src/ProductionIncident.Harness/ProductionIncident.Harness.csproj" />
+    <Project Path="src/ProductionIncident.Infrastructure/ProductionIncident.Infrastructure.csproj" />
+    <Project Path="src/ProductionIncident.LlmOps/ProductionIncident.LlmOps.csproj" />
+    <Project Path="src/ProductionIncident.Mcp/ProductionIncident.Mcp.csproj" />
+    <Project Path="src/ProductionIncident.McpServer/ProductionIncident.McpServer.csproj" />
+    <Project Path="src/ProductionIncident.Memory/ProductionIncident.Memory.csproj" />
+    <Project Path="src/ProductionIncident.Rag/ProductionIncident.Rag.csproj" />
+    <Project Path="src/ProductionIncident.Skills/ProductionIncident.Skills.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ProductionIncident.AgentEvals/ProductionIncident.AgentEvals.csproj" />
+    <Project Path="tests/ProductionIncident.IntegrationTests/ProductionIncident.IntegrationTests.csproj" />
+    <Project Path="tests/ProductionIncident.RegressionEvals/ProductionIncident.RegressionEvals.csproj" />
+    <Project Path="tests/ProductionIncident.UnitTests/ProductionIncident.UnitTests.csproj" />
+    <Project Path="tests/ProductionIncident.WorkflowTests/ProductionIncident.WorkflowTests.csproj" />
+  </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+    <File Path="README.md" />
+    <File Path="docs/architecture.md" />
+  </Folder>
+</Solution>
