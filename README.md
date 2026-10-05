@@ -16,6 +16,11 @@ Alert / API ─► Gateway ─► HARNESS-controlled WORKFLOW
                           ─► Close & learn (report, memory consolidation, postmortem → RAG, evals, receipts)
 ```
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/workflow-dark.png">
+  <img alt="Investigation workflow: Triage, concurrent round, root cause with a deep-dive loop, remediation, human approval, execution, verification, closing; failure paths lead to Escalated" src="docs/images/workflow-light.png">
+</picture>
+
 For an interactive version (clickable phases, a step-by-step replay of a real run, agent loop and project map),
 open [`docs/flow.html`](docs/flow.html) in a browser.
 
@@ -39,6 +44,11 @@ needs a deep dive), **search-api** (CPU saturation from a traffic surge), **paym
 
 ## Solution layout (blueprint §15)
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/projects-dark.png">
+  <img alt="Project dependency tiers: Api and McpServer, Infrastructure, Application, Agents/Mcp/Rag/Memory, Harness/Skills/LlmOps, Core" src="docs/images/projects-light.png">
+</picture>
+
 | Project | Responsibility |
 |---|---|
 | `ProductionIncident.Core` | Structured agent contracts (§8), `InvestigationState` (working memory), tool/RAG/memory/approval abstractions |
@@ -57,6 +67,11 @@ needs a deep dive), **search-api** (CPU saturation from a traffic surge), **paym
 Tests: `UnitTests`, `WorkflowTests`, `AgentEvals`, `RegressionEvals` (dataset in `evals/`), `IntegrationTests`.
 
 ## How the blueprint maps to code
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/agent-loop-dark.png">
+  <img alt="Agent loop in AgentRunner: context, LLM call, policy check, run tool, trim result, back to the model; the final answer is parsed into a typed contract" src="docs/images/agent-loop-light.png">
+</picture>
 
 | Blueprint | Where |
 |---|---|
